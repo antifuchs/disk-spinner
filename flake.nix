@@ -32,9 +32,11 @@
               "${inputs.devshell}/extra/language/rust.nix"
               "${inputs.devshell}/extra/language/c.nix"
             ];
+            packages = [fenix.packages.${system}.stable.rust-analyzer];
             language.rust = {
               enableDefaultToolchain = false;
               packageSet = fenix.packages.${system}.stable;
+              tools = ["rust-analyzer" "cargo" "clippy" "rustfmt" "rustc"];
             };
 
             language.c.includes = [pkgs.udev];
