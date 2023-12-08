@@ -1,22 +1,22 @@
-#[macro_use]
-extern crate lazy_static;
-
-use indicatif::ProgressStyle;
-use tracing::Span;
-use tracing_indicatif::span_ext::IndicatifSpanExt;
-use tracing_indicatif::IndicatifLayer;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-
 use anyhow::Context;
 use clap::Parser;
+use indicatif::ProgressStyle;
+use rand::prelude::*;
 use std::{
     fs::OpenOptions,
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
 };
+use tracing::Span;
 use tracing::{info, info_span, warn};
+use tracing_indicatif::span_ext::IndicatifSpanExt;
+use tracing_indicatif::IndicatifLayer;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+
+#[macro_use]
+extern crate lazy_static;
 
 #[derive(Debug, Clone)]
 struct ValidDevice {
@@ -94,6 +94,9 @@ fn main() -> anyhow::Result<()> {
             warn!(?device.media_type, "Media type is not as expected but running tests anyway.");
         }
     }
+    if args.buffer_size <= Some(blake3::OUT_LEN) {
+        anyhow::bail!("Buffer size must be at least as long as the blake3 hash output (32) + 1 byte");
+    }
     // TODO: Maybe test that the disk is empty?
 
     info!(?partition, ?device, ?path, "Starting test");
@@ -119,7 +122,7 @@ lazy_static! {
     ).expect("Internal error in indicatif progress bar template syntax");
 }
 
-// TODO: return hashed data
+// TODO: return the hashed data
 #[tracing::instrument(skip(dev, buffer_size))]
 fn write_test(
     dev_path: &Path,
@@ -137,15 +140,19 @@ fn write_test(
     let bar_span_handle = bar_span.enter();
 
     let mut buf: Vec<u8> = Vec::with_capacity(buffer_size);
+    buf.resize_with(buffer_size, Default::default);
     loop {
-        for _n in 0..200 {
-            buf.write_all(&[0xca, 0xfe, 0xba, 0xbe])
-                .context("filling buffer")?;
-        }
-        out.write_all(&buf)?; // feca beba for some reason
+        fill_buffer(&mut buf, None);
+        out.write_all(&buf)?;
         Span::current().pb_inc(buf.len().try_into().unwrap());
-        buf.clear();
     }
 
     Ok(())
+}
+
+fn fill_buffer(buffer: &mut Vec<u8>, previous_hash: Option<&blake3::Hash>) {
+    let mut rng = thread_rng();
+    let cap = buffer.capacity();
+    rng.fill_bytes(&mut buffer[0..cap]);
+    // TODO: hash the data
 }

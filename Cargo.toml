@@ -7,10 +7,12 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.75"
+blake3 = "1.5.0"
 block-utils = "0.11.1"
 clap = { version = "4.4.11", features = ["derive"] }
 indicatif = "0.17.7"
 lazy_static = "1.4.0"
+rand = "0.8.5"
 read-restrict = "0.3.0"
 tracing = "0.1.40"
 tracing-indicatif = "0.3.5"
