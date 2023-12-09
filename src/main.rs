@@ -1,6 +1,7 @@
 use anyhow::Context;
 use clap::Parser;
 use indicatif::ProgressStyle;
+use std::num::NonZeroUsize;
 use std::{path::PathBuf, str::FromStr};
 use tracing::{info, warn};
 use tracing_indicatif::IndicatifLayer;
@@ -50,6 +51,10 @@ struct Args {
     /// Defaults to the physical block size of the device (or 8192 if that is unset).
     #[clap(long)]
     buffer_size: Option<usize>,
+
+    /// Number of threads to spawn for generating to-write blocks.
+    #[clap(long, short('j'))]
+    write_concurrency: Option<NonZeroUsize>,
 
     /// Test the device even if the media type is not a spinning disk.
     #[clap(long)]
@@ -106,7 +111,7 @@ fn main() -> anyhow::Result<()> {
 
     info!(?partition, ?device, ?path, "Starting test");
 
-    write_test::run(&path, &device, buffer_size).context("During write test")?;
+    write_test::run(&path, &device, buffer_size, args.write_concurrency).context("During write test")?;
     Ok(())
 }
 
