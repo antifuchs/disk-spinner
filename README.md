@@ -12,6 +12,12 @@ It destructively writes blocks of random data  to an entire disk device (or, opt
 
 If any data could not be read exactly as written, it informs you in big letters. That means your disk is bad & you should make use of your vendor's RMA policy. Doesn't it feel great to not run into problems?
 
+## Platform support
+
+This tool is made mainly for linux, but should work on many posix-ish systems; I've tested it on macOS, where it does the thing too.
+
+The Linux platform is privileged a bit in terms of not only my own platform usage (my NAS running zfs on linux and all that) but also safety checking (we use udev to determine various things about the devices under test and error if they look used or non-mechanical), and terminal UI (I am confident only in Linux's ability to return accurate sizes of the block device being tested).
+
 ## The name
 
 This tool is for spinning disks; it's also a play on the German word "Spinner" (a goofball), referring to me - a person goofy about disks.
