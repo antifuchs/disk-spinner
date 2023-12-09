@@ -83,3 +83,34 @@ impl<R: io::Read> io::Write for CompareWriter<R> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::CompareWriter;
+    use std::io;
+    use tracing_test::traced_test;
+
+    #[traced_test]
+    #[test]
+    fn detects_issues() {
+        let input: Vec<u8> = vec![1; 1024 * 1024];
+        let mut read_back: Vec<u8> = vec![1; 1024 * 1024];
+        read_back[1024 * 512] = 255; // corrupt our read-back data
+        let mut read_back = io::Cursor::new(read_back);
+
+        let mut compare = CompareWriter::new(io::Cursor::new(input));
+        io::copy(&mut read_back, &mut compare).expect("No io errors");
+        assert_eq!(compare.mismatched, 1);
+    }
+
+    #[traced_test]
+    #[test]
+    fn succeeds() {
+        let input: Vec<u8> = vec![1; 1024 * 1024];
+        let read_back: Vec<u8> = vec![1; 1024 * 1024];
+        let mut read_back = io::Cursor::new(read_back);
+        let mut compare = CompareWriter::new(io::Cursor::new(input));
+        io::copy(&mut read_back, &mut compare).expect("No io errors");
+        assert_eq!(compare.mismatched, 0);
+    }
+}
