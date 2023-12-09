@@ -12,7 +12,7 @@ use std::{
 use tracing::{debug, info_span, Span};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
-#[tracing::instrument(skip(dev, buffer_size))]
+#[tracing::instrument(skip(dev, buffer_size, concurrency))]
 pub(crate) fn run(
     dev_path: &Path,
     dev: &block_utils::Device,
