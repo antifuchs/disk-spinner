@@ -109,8 +109,8 @@ fn main() -> anyhow::Result<()> {
 
         info!(?seed, ?partition, ?device, ?path, "Starting test");
 
-        write_test::write(&path, &device, buffer_size, seed).context("During write test")?;
-        read_test::read_back(&path, &device, buffer_size, seed).context("During read test")?;
+        write_test::write(&path, buffer_size, seed).context("During write test")?;
+        read_test::read_back(&path, buffer_size, seed).context("During read test")?;
         Ok(())
     })
 }

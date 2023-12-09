@@ -4,16 +4,15 @@ use crate::{crypto::GarbageGenerator, PROGRESS_STYLE};
 use anyhow::Context;
 use std::{
     fs::OpenOptions,
-    io::{self, BufReader},
+    io::{self, BufReader, Seek},
     path::Path,
 };
 use tracing::{error, info_span, warn, Span};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
-#[tracing::instrument(skip(dev, buffer_size, seed))]
+#[tracing::instrument(skip(buffer_size, seed))]
 pub(crate) fn read_back(
     dev_path: &Path,
-    dev: &block_utils::Device,
     buffer_size: usize,
     seed: u64,
 ) -> anyhow::Result<()> {
@@ -21,10 +20,12 @@ pub(crate) fn read_back(
         .read(true)
         .open(dev_path)
         .with_context(|| format!("Opening the device {:?} for reading", dev_path))?;
+    let capacity = blockdev.seek(io::SeekFrom::End(0))?;
+    blockdev.seek(io::SeekFrom::Start(0))?;
 
     let bar_span = info_span!("reading back");
     bar_span.pb_set_style(&PROGRESS_STYLE);
-    bar_span.pb_set_length(dev.capacity);
+    bar_span.pb_set_length(capacity);
     let _bar_span_handle = bar_span.enter();
 
     let generator = GarbageGenerator::new(buffer_size, seed, |read| {
@@ -36,7 +37,6 @@ pub(crate) fn read_back(
     if compare.mismatched > 0 {
         error!(
             ?dev_path,
-            serial = dev.serial_number,
             compare.mismatched,
             "DATA INCONSISTENCIES DETECTED"
         );
