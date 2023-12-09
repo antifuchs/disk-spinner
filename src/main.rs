@@ -1,6 +1,7 @@
 use anyhow::Context;
 use clap::Parser;
 use indicatif::ProgressStyle;
+use rand::prelude::*;
 use std::{path::PathBuf, str::FromStr};
 use tracing::{info, warn};
 use tracing_indicatif::IndicatifLayer;
@@ -11,6 +12,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 extern crate lazy_static;
 
 mod crypto;
+mod read_test;
 mod write_test;
 
 #[derive(Debug, Clone)]
@@ -103,9 +105,12 @@ fn main() -> anyhow::Result<()> {
     }
     // TODO: Maybe test that the disk is empty?
 
-    info!(?partition, ?device, ?path, "Starting test");
+    let seed = args.seed.unwrap_or_else(|| thread_rng().gen());
 
-    write_test::run(&path, &device, buffer_size, args.seed).context("During write test")?;
+    info!(?seed, ?partition, ?device, ?path, "Starting test");
+
+    write_test::write(&path, &device, buffer_size, seed).context("During write test")?;
+    read_test::read_back(&path, &device, buffer_size, seed).context("During read test")?;
     Ok(())
 }
 

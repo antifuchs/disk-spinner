@@ -2,29 +2,26 @@
 
 use crate::{crypto::GarbageGenerator, PROGRESS_STYLE};
 use anyhow::Context;
-use rand::prelude::*;
 use std::{
     fs::OpenOptions,
     io::{self, BufReader},
     path::Path,
 };
-use tracing::{info, info_span, Span};
+use tracing::{info_span, Span};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 #[tracing::instrument(skip(dev, buffer_size, seed))]
-pub(crate) fn run(
+pub(crate) fn write(
     dev_path: &Path,
     dev: &block_utils::Device,
     buffer_size: usize,
-    seed: Option<u64>,
+    seed: u64,
 ) -> anyhow::Result<()> {
     let mut out = OpenOptions::new()
         .write(true)
         .open(dev_path)
         .with_context(|| format!("Opening the device {:?} for writing", dev_path))?;
 
-    let seed = seed.unwrap_or_else(|| thread_rng().gen());
-    info!(seed, "Generating garbage data with seed");
     let bar_span = info_span!("writing");
     bar_span.pb_set_style(&PROGRESS_STYLE);
     bar_span.pb_set_length(dev.capacity);
