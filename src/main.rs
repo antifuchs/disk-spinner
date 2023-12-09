@@ -3,7 +3,6 @@ use clap::Parser;
 use indicatif::ProgressStyle;
 use rand::prelude::*;
 use rayon::prelude::*;
-use std::{path::PathBuf, str::FromStr};
 use tracing::{info, warn};
 use tracing_indicatif::IndicatifLayer;
 use tracing_subscriber::layer::SubscriberExt;
@@ -16,27 +15,16 @@ mod crypto;
 mod read_test;
 mod write_test;
 
-#[derive(Debug, Clone)]
-struct ValidDevice {
-    path: PathBuf,
-    partition: Option<u64>,
-    device: block_utils::Device,
-}
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux::ValidDevice;
 
-impl FromStr for ValidDevice {
-    type Err = anyhow::Error;
+#[cfg(not(target_os = "linux"))]
+mod other_os;
+#[cfg(not(target_os = "linux"))]
+use other_os::ValidDevice;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (partition, device) = block_utils::get_device_from_path(s)?;
-        Ok(Self {
-            path: PathBuf::from(s),
-            partition,
-            device: device.ok_or(anyhow::anyhow!(
-                "The device under test must be a valid block device."
-            ))?,
-        })
-    }
-}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
