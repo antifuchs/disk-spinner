@@ -10,6 +10,7 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
+        "aarch64-darwin"
       ];
 
       imports = [
@@ -39,7 +40,14 @@
               tools = ["rust-analyzer" "cargo" "clippy" "rustfmt" "rustc"];
             };
 
-            language.c.includes = [pkgs.udev];
+            language.c.includes =
+              pkgs.lib.mkIf
+              (! pkgs.stdenv.isDarwin) [pkgs.udev];
+            language.c.libraries = (
+              pkgs.lib.mkIf pkgs.stdenv.isDarwin [
+                pkgs.libiconv
+              ]
+            );
           };
         };
       };
