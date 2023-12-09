@@ -40,7 +40,14 @@
               tools = ["rust-analyzer" "cargo" "clippy" "rustfmt" "rustc"];
             };
 
-            language.c.includes = pkgs.lib.mkIf (system != "aarch64-darwin") [pkgs.udev];
+            language.c.includes =
+              pkgs.lib.mkIf
+              (! pkgs.stdenv.isDarwin) [pkgs.udev];
+            language.c.libraries = (
+              pkgs.lib.mkIf pkgs.stdenv.isDarwin [
+                pkgs.libiconv
+              ]
+            );
           };
         };
       };

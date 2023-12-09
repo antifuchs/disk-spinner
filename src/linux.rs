@@ -1,5 +1,10 @@
 extern crate block_utils;
-use std::{path::PathBuf, str::FromStr};
+use crate::Args;
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+use tracing::warn;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ValidDevice {
@@ -21,4 +26,29 @@ impl FromStr for ValidDevice {
             ))?,
         })
     }
+}
+
+pub(crate) fn sanity_checks(
+    args: &Args,
+    partition: Option<u64>,
+    device_path: &Path,
+    device: &block_utils::Device,
+) -> anyhow::Result<()> {
+    // Sanity checks:
+    if partition.is_some() {
+        if !args.allow_any_block_device {
+            anyhow::bail!("Device is not a whole disk but a partition - pass --allow-any-block-device to run tests anyway.");
+        } else {
+            warn!(?partition, "Testing a partition but running tests anyway.");
+        }
+    }
+    if device.media_type != block_utils::MediaType::Rotational {
+        if !args.allow_any_media {
+            anyhow::bail!("Device is not a rotational disk - this tool may be harmful to solid-state drives and others! Pass --allow-any-media to run anyway.");
+        } else {
+            warn!(?device.media_type, "Media type is not as expected but running tests anyway.");
+        }
+    }
+    // TODO: Maybe test that the disk is empty?
+    Ok(())
 }

@@ -3,7 +3,7 @@ use clap::Parser;
 use indicatif::ProgressStyle;
 use rand::prelude::*;
 use rayon::prelude::*;
-use tracing::{info, warn};
+use tracing::info;
 use tracing_indicatif::IndicatifLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -18,17 +18,20 @@ mod write_test;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
+use linux::sanity_checks;
+#[cfg(target_os = "linux")]
 use linux::ValidDevice;
 
 #[cfg(not(target_os = "linux"))]
 mod other_os;
 #[cfg(not(target_os = "linux"))]
+use other_os::sanity_checks;
+#[cfg(not(target_os = "linux"))]
 use other_os::ValidDevice;
-
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-struct Args {
+pub(crate) struct Args {
     /// Name of the devices to test.
     ///
     /// Each should be a mechanical disk block device (e.g. /dev/sda,
@@ -54,6 +57,10 @@ struct Args {
     /// a disk (e.g. a single partition).
     #[clap(long)]
     allow_any_block_device: bool,
+
+    /// Run the test even if any sanity check at all could fail. This is dangerous.
+    #[clap(long)]
+    i_know_what_im_doing_let_me_skip_sanity_checks: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -64,7 +71,7 @@ fn main() -> anyhow::Result<()> {
         .init();
     let args = Args::parse();
     let seed = args.seed.unwrap_or_else(|| thread_rng().gen());
-    args.devices.into_par_iter().try_for_each(|device| {
+    args.devices.clone().into_par_iter().try_for_each(|device| {
         let ValidDevice {
             device,
             partition,
@@ -77,23 +84,7 @@ fn main() -> anyhow::Result<()> {
                 .try_into()
                 .unwrap()
         });
-
-        // Sanity checks:
-        if partition.is_some() {
-            if !args.allow_any_block_device {
-                anyhow::bail!("Device is not a whole disk but a partition - pass --allow-any-block-device to run tests anyway.");
-            } else {
-                warn!(?partition, "Testing a partition but running tests anyway.");
-            }
-        }
-        if device.media_type != block_utils::MediaType::Rotational {
-            if !args.allow_any_media {
-                anyhow::bail!("Device is not a rotational disk - this tool may be harmful to solid-state drives and others! Pass --allow-any-media to run anyway.");
-            } else {
-                warn!(?device.media_type, "Media type is not as expected but running tests anyway.");
-            }
-        }
-        // TODO: Maybe test that the disk is empty?
+        sanity_checks(&args, partition, &path, &device)?;
 
         info!(?seed, ?partition, ?device, ?path, "Starting test");
 
