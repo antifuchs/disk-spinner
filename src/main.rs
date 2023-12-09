@@ -2,6 +2,7 @@ use anyhow::Context;
 use clap::Parser;
 use indicatif::ProgressStyle;
 use rand::prelude::*;
+use rayon::prelude::*;
 use std::{path::PathBuf, str::FromStr};
 use tracing::{info, warn};
 use tracing_indicatif::IndicatifLayer;
@@ -40,12 +41,12 @@ impl FromStr for ValidDevice {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Name of the device to test.
+    /// Name of the devices to test.
     ///
-    /// This should be a mechanical disk block device (e.g. /dev/sda,
+    /// Each should be a mechanical disk block device (e.g. /dev/sda,
     /// /dev/disk/by-id/wwn-...).
-    #[clap(value_parser = clap::value_parser!(ValidDevice))]
-    device: ValidDevice,
+    #[clap(value_parser = clap::value_parser!(ValidDevice), num_args = 1..)]
+    devices: Vec<ValidDevice>,
 
     /// Number of bytes to buffer for writing.
     ///
@@ -75,43 +76,45 @@ fn main() -> anyhow::Result<()> {
         .init();
     let args = Args::parse();
 
-    let ValidDevice {
-        device,
-        partition,
-        path,
-    } = args.device;
-    let buffer_size = args.buffer_size.unwrap_or_else(|| {
-        device
-            .physical_block_size
-            .unwrap_or(8192)
-            .try_into()
-            .unwrap()
-    });
+    args.devices.into_par_iter().try_for_each(|device| {
+        let ValidDevice {
+            device,
+            partition,
+            path,
+        } = device;
+        let buffer_size = args.buffer_size.unwrap_or_else(|| {
+            device
+                .physical_block_size
+                .unwrap_or(8192)
+                .try_into()
+                .unwrap()
+        });
 
-    // Sanity checks:
-    if partition.is_some() {
-        if !args.allow_any_block_device {
-            anyhow::bail!("Device is not a whole disk but a partition - pass --allow-any-block-device to run tests anyway.");
-        } else {
-            warn!(?partition, "Testing a partition but running tests anyway.");
+        // Sanity checks:
+        if partition.is_some() {
+            if !args.allow_any_block_device {
+                anyhow::bail!("Device is not a whole disk but a partition - pass --allow-any-block-device to run tests anyway.");
+            } else {
+                warn!(?partition, "Testing a partition but running tests anyway.");
+            }
         }
-    }
-    if device.media_type != block_utils::MediaType::Rotational {
-        if !args.allow_any_media {
-            anyhow::bail!("Device is not a rotational disk - this tool may be harmful to solid-state drives and others! Pass --allow-any-media to run anyway.");
-        } else {
-            warn!(?device.media_type, "Media type is not as expected but running tests anyway.");
+        if device.media_type != block_utils::MediaType::Rotational {
+            if !args.allow_any_media {
+                anyhow::bail!("Device is not a rotational disk - this tool may be harmful to solid-state drives and others! Pass --allow-any-media to run anyway.");
+            } else {
+                warn!(?device.media_type, "Media type is not as expected but running tests anyway.");
+            }
         }
-    }
-    // TODO: Maybe test that the disk is empty?
+        // TODO: Maybe test that the disk is empty?
 
-    let seed = args.seed.unwrap_or_else(|| thread_rng().gen());
+        let seed = args.seed.unwrap_or_else(|| thread_rng().gen());
 
-    info!(?seed, ?partition, ?device, ?path, "Starting test");
+        info!(?seed, ?partition, ?device, ?path, "Starting test");
 
-    write_test::write(&path, &device, buffer_size, seed).context("During write test")?;
-    read_test::read_back(&path, &device, buffer_size, seed).context("During read test")?;
-    Ok(())
+        write_test::write(&path, &device, buffer_size, seed).context("During write test")?;
+        read_test::read_back(&path, &device, buffer_size, seed).context("During read test")?;
+        Ok(())
+    })
 }
 
 lazy_static! {
