@@ -9,7 +9,7 @@ use std::{
     sync::mpsc::{channel, Sender},
     thread::{self, JoinHandle},
 };
-use tracing::{debug, info_span, Span};
+use tracing::{info_span, trace, Span};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 #[tracing::instrument(skip(dev, buffer_size, concurrency))]
@@ -71,7 +71,7 @@ fn generate_all_blocks(
 fn generate_block(sender: Sender<buffer::Block>, block_size: usize) {
     loop {
         if let Err(error) = sender.send(buffer::Block::new(block_size)) {
-            debug!(%error, "Received error sending down the to-write block channel. Treating as our signal to terminate.");
+            trace!(%error, "Received error sending down the to-write block channel. Treating as our signal to terminate.");
             return;
         }
     }
