@@ -71,7 +71,6 @@ fn generate_all_blocks(
 fn generate_block(sender: Sender<buffer::Block>, block_size: usize) {
     loop {
         if let Err(error) = sender.send(buffer::Block::new(block_size)) {
-            trace!(%error, "Received error sending down the to-write block channel. Treating as our signal to terminate.");
             return;
         }
     }
