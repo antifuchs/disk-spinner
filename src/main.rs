@@ -1,7 +1,6 @@
 use anyhow::Context;
 use clap::Parser;
 use indicatif::ProgressStyle;
-use std::num::NonZeroUsize;
 use std::{path::PathBuf, str::FromStr};
 use tracing::{info, warn};
 use tracing_indicatif::IndicatifLayer;
@@ -11,7 +10,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 #[macro_use]
 extern crate lazy_static;
 
-mod buffer;
+mod crypto;
 mod write_test;
 
 #[derive(Debug, Clone)]
@@ -52,9 +51,9 @@ struct Args {
     #[clap(long)]
     buffer_size: Option<usize>,
 
-    /// Number of threads to spawn for generating to-write blocks.
-    #[clap(long, short('j'))]
-    write_concurrency: Option<NonZeroUsize>,
+    /// Random seed to use for generating random data. By default, this tool generates its own.
+    #[clap(long)]
+    seed: Option<u64>,
 
     /// Test the device even if the media type is not a spinning disk.
     #[clap(long)]
@@ -102,16 +101,11 @@ fn main() -> anyhow::Result<()> {
             warn!(?device.media_type, "Media type is not as expected but running tests anyway.");
         }
     }
-    if buffer_size <= blake3::OUT_LEN {
-        anyhow::bail!(
-            "Buffer size must be at least as long as the blake3 hash output (32) + 1 byte"
-        );
-    }
     // TODO: Maybe test that the disk is empty?
 
     info!(?partition, ?device, ?path, "Starting test");
 
-    write_test::run(&path, &device, buffer_size, args.write_concurrency).context("During write test")?;
+    write_test::run(&path, &device, buffer_size, args.seed).context("During write test")?;
     Ok(())
 }
 
