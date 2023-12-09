@@ -75,7 +75,7 @@ fn main() -> anyhow::Result<()> {
         .with(indicatif_layer)
         .init();
     let args = Args::parse();
-
+    let seed = args.seed.unwrap_or_else(|| thread_rng().gen());
     args.devices.into_par_iter().try_for_each(|device| {
         let ValidDevice {
             device,
@@ -106,8 +106,6 @@ fn main() -> anyhow::Result<()> {
             }
         }
         // TODO: Maybe test that the disk is empty?
-
-        let seed = args.seed.unwrap_or_else(|| thread_rng().gen());
 
         info!(?seed, ?partition, ?device, ?path, "Starting test");
 
