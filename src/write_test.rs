@@ -11,11 +11,7 @@ use tracing::{info_span, Span};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 #[tracing::instrument(skip(buffer_size, seed))]
-pub(crate) fn write(
-    dev_path: &Path,
-    buffer_size: usize,
-    seed: u64,
-) -> anyhow::Result<()> {
+pub(crate) fn write(dev_path: &Path, buffer_size: usize, seed: u64) -> anyhow::Result<()> {
     let mut out = OpenOptions::new()
         .write(true)
         .open(dev_path)
@@ -38,6 +34,10 @@ pub(crate) fn write(
             // "disk full", meaning we're done:
             Ok(())
         }
-        Err(e) => Err(e.into()),
+        Err(e) if e.kind() == io::ErrorKind::WriteZero => {
+            // "disk full" on macOS, meaning we're done:
+            Ok(())
+        }
+        Err(e) => anyhow::bail!("io Error {:?}: kind {:?}", e, e.kind()),
     }
 }
