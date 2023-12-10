@@ -53,6 +53,17 @@ pub(crate) fn sanity_checks(
             warn!(?device.media_type, ?device_path, "Media type is not as expected but running tests anyway.");
         }
     }
-    // TODO: Maybe test that the disk is empty?
+    let child_partitions: Vec<PathBuf> = block_utils::get_block_partitions_iter()?
+        .filter(|part_path| {
+            part_path
+                .file_name()
+                .map(|name| name.to_string_lossy().starts_with(&device.name))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    if child_partitions.len() > 0 {
+        anyhow::bail!("Detected child partitions on the device - I won't help you destroy an in-use drive: Delete those partitions yourself. Partitions found: {:?}", child_partitions);
+    }
     Ok(())
 }
