@@ -24,8 +24,47 @@
         final,
         system,
         ...
-      }: {
+      }: let
+        cIncludes =
+          pkgs.lib.mkIf
+          (! pkgs.stdenv.isDarwin) [pkgs.udev];
+        cLibs = pkgs.lib.mkIf pkgs.stdenv.isDarwin [
+          pkgs.libiconv
+        ];
+      in {
         formatter = pkgs.alejandra;
+
+        packages.default = config.packages.disk-spinner;
+        packages.disk-spinner = let
+          rustPlatform = pkgs.makeRustPlatform {
+            inherit (fenix.packages.${system}.stable) rustc cargo;
+          };
+          # nativeBuildInputs = (builtins.map (l: pkgs.lib.getDev l) cIncludes) ++ cLibs ++ [pkgs.pkg-config];
+        in
+          rustPlatform.buildRustPackage rec {
+            pname = "disk-spinner";
+            version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
+            # inherit nativeBuildInputs;
+            # buildInputs = nativeBuildInputs;
+            src = let
+              fs = pkgs.lib.fileset;
+            in
+              fs.toSource {
+                root = ./.;
+                fileset = fs.unions [
+                  ./Cargo.toml
+                  ./Cargo.lock
+                  ./src
+                ];
+              };
+            cargoLock.lockFile = ./Cargo.lock;
+            meta.mainProgram = "disk-spinner";
+          };
+
+        apps = {
+          default = config.apps.disk-spinner;
+          disk-spinner.program = config.packages.disk-spinner;
+        };
 
         devshells = {
           default = {
@@ -40,14 +79,8 @@
               tools = ["rust-analyzer" "cargo" "clippy" "rustfmt" "rustc"];
             };
 
-            language.c.includes =
-              pkgs.lib.mkIf
-              (! pkgs.stdenv.isDarwin) [pkgs.udev];
-            language.c.libraries = (
-              pkgs.lib.mkIf pkgs.stdenv.isDarwin [
-                pkgs.libiconv
-              ]
-            );
+            language.c.includes = cIncludes;
+            language.c.libraries = cLibs;
           };
         };
       };
