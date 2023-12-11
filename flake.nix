@@ -26,11 +26,13 @@
         ...
       }: let
         cIncludes =
-          pkgs.lib.mkIf
-          (! pkgs.stdenv.isDarwin) [pkgs.udev];
-        cLibs = pkgs.lib.mkIf pkgs.stdenv.isDarwin [
-          pkgs.libiconv
-        ];
+          if (! pkgs.stdenv.isDarwin)
+          then [pkgs.udev]
+          else [];
+        cLibs =
+          if pkgs.stdenv.isDarwin
+          then [pkgs.libiconv]
+          else [];
       in {
         formatter = pkgs.alejandra;
 
@@ -39,13 +41,17 @@
           rustPlatform = pkgs.makeRustPlatform {
             inherit (fenix.packages.${system}.stable) rustc cargo;
           };
-          # nativeBuildInputs = (builtins.map (l: pkgs.lib.getDev l) cIncludes) ++ cLibs ++ [pkgs.pkg-config];
+          nativeBuildInputs =
+            (builtins.map (l: pkgs.lib.getDev l) cIncludes)
+            ++ cIncludes
+            ++ cLibs
+            ++ [pkgs.pkg-config];
         in
-          rustPlatform.buildRustPackage rec {
+          rustPlatform.buildRustPackage {
             pname = "disk-spinner";
             version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
-            # inherit nativeBuildInputs;
-            # buildInputs = nativeBuildInputs;
+            inherit nativeBuildInputs;
+            buildInputs = nativeBuildInputs;
             src = let
               fs = pkgs.lib.fileset;
             in
