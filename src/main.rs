@@ -1,8 +1,12 @@
+use std::path::PathBuf;
+
 use anyhow::Context;
 use clap::Parser;
 use indicatif::ProgressStyle;
 use rand::prelude::*;
+use rayon::iter::Either;
 use rayon::prelude::*;
+use tracing::error;
 use tracing::info;
 use tracing_indicatif::IndicatifLayer;
 use tracing_subscriber::layer::SubscriberExt;
@@ -71,7 +75,7 @@ fn main() -> anyhow::Result<()> {
         .init();
     let args = Args::parse();
     let seed = args.seed.unwrap_or_else(|| thread_rng().gen());
-    args.devices.clone().into_par_iter().try_for_each(|device| {
+    let (_, failed) = args.devices.clone().into_par_iter().map(|device| {
         let ValidDevice {
             device,
             partition,
@@ -90,10 +94,22 @@ fn main() -> anyhow::Result<()> {
 
         write_test::write(&path, buffer_size, seed).context("During write test")?;
         info!(device=?path, "write test succeeded");
-        read_test::read_back(&path, buffer_size, seed).context("During read test")?;
-        info!(device=?path, "read-back test succeeded");
-        Ok(())
-    })
+        match read_test::read_back(&path, buffer_size, seed).context("During read test")? {
+            Ok(_) => {
+                info!(device=?path, "read-back test succeeded");
+                Ok(Either::Left(()))
+            }
+            Err(n) => {
+                error!(device=?path, bad_blocks=?n, "Data on disk is inconsistent/corrupted. THIS IS BAD - RMA THE DRIVE!");
+                Ok(Either::Right(path))
+            }
+        }
+    }).collect::<anyhow::Result<(Vec<()>, Vec<PathBuf>)>>()?;
+    if failed.len() > 0 {
+        error!(devices=?failed, "Devices have failed validation. You should return them.");
+        anyhow::bail!("Tests not successful.");
+    }
+    Ok(())
 }
 
 lazy_static! {

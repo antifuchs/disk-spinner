@@ -7,15 +7,17 @@ use std::{
     io::{self, BufReader, Seek},
     path::Path,
 };
-use tracing::{error, info_span, warn, Span};
+use tracing::{info_span, warn, Span};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
+
+type FailedReads = usize;
 
 #[tracing::instrument(skip(buffer_size, seed))]
 pub(crate) fn read_back(
     dev_path: &Path,
     buffer_size: usize,
     seed: u64,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Result<(), FailedReads>> {
     let mut blockdev = OpenOptions::new()
         .read(true)
         .open(dev_path)
@@ -35,14 +37,9 @@ pub(crate) fn read_back(
     let mut compare = CompareWriter::new(generator);
     io::copy(&mut blockdev, &mut compare)?;
     if compare.mismatched > 0 {
-        error!(
-            ?dev_path,
-            compare.mismatched,
-            "DATA INCONSISTENCIES DETECTED"
-        );
-        anyhow::bail!("THIS IS BAD - RMA THE DRIVE");
+        return Ok(Err(compare.mismatched));
     }
-    Ok(())
+    Ok(Ok(()))
 }
 
 /// A struct that pretends to be [io::Write] by doing block-by-block comparisons against another reader.
