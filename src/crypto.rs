@@ -1,17 +1,15 @@
 //! Routines for generating an infinite amount of deterministic garbage.
 
-use std::io;
-use aes::cipher::{KeyIvInit, StreamCipher};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-
-type ActiveCipher = ctr::Ctr128LE<aes::Aes128>;
+use std::io;
 
 /// A generator for deterministically random-looking garbage data.
 #[derive(Clone)]
 pub(crate) struct GarbageGenerator<P: Fn(u64)> {
     buf: Vec<u8>,
-    cipher: ActiveCipher,
+    hasher: blake3::Hasher,
+    lba: usize,
     progress: P,
 }
 
@@ -22,13 +20,16 @@ impl<P: Fn(u64)> GarbageGenerator<P> {
         buf.resize(block_size, 0);
 
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        let mut key = [0; 16];
-        let mut iv = [0; 16];
+        let mut key = [0; 32];
         rng.fill_bytes(&mut key);
-        rng.fill_bytes(&mut iv);
-        let cipher = ActiveCipher::new(&key.into(), &iv.into());
+        let hasher = blake3::Hasher::new_keyed(&key);
 
-        Self { buf, cipher, progress }
+        Self {
+            buf,
+            hasher,
+            lba: 0,
+            progress,
+        }
     }
 }
 
@@ -38,10 +39,14 @@ impl<P: Fn(u64)> io::Read for GarbageGenerator<P> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut done = 0;
         for chunk in buf.chunks_exact_mut(self.buf.len()) {
-            self.cipher
-                .apply_keystream_b2b(&self.buf, chunk)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("crypto error {:?}", e)))?;
-            done+=chunk.len();
+            let length = chunk.len();
+            let mut chunk = io::Cursor::new(chunk);
+            self.hasher.update(&self.lba.to_le_bytes());
+            let reader = self.hasher.finalize_xof();
+            io::copy(&mut reader.take(length.try_into().unwrap()), &mut chunk)?;
+            self.hasher.reset();
+            done += length;
+            self.lba += 1;
         }
         (self.progress)(done.try_into().unwrap());
         Ok(done)
