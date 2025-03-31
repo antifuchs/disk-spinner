@@ -89,6 +89,8 @@
             language.c.libraries = cLibs;
           };
         };
+
+        overlayAttrs = {inherit (config.packages) disk-spinner;};
       };
     };
 
