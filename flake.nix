@@ -63,6 +63,7 @@
                   ./src
                 ];
               };
+            doCheck = false; # The sandbox blocks io_uring, which makes testing this program impossible.
             cargoLock.lockFile = ./Cargo.lock;
             meta.mainProgram = "disk-spinner";
           };
