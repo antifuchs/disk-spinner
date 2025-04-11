@@ -68,7 +68,8 @@ pub(crate) struct Args {
 }
 
 fn main() -> anyhow::Result<()> {
-    let indicatif_layer = IndicatifLayer::new();
+    let indicatif_layer = IndicatifLayer::new()
+        .with_max_progress_bars(128, None);
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_stderr_writer()))
         .with(indicatif_layer)
