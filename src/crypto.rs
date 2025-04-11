@@ -1,6 +1,7 @@
 //! Routines for generating an infinite amount of deterministic garbage.
 
 use std::io;
+
 use aes::cipher::{KeyIvInit, StreamCipher};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -18,8 +19,7 @@ pub(crate) struct GarbageGenerator<P: Fn(u64)> {
 impl<P: Fn(u64)> GarbageGenerator<P> {
     /// Generate a new garbage generator for a block size from a random seed.
     pub(crate) fn new(block_size: usize, seed: u64, progress: P) -> Self {
-        let mut buf = Vec::new();
-        buf.resize(block_size, 0);
+        let buf = vec![0; block_size];
 
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let mut key = [0; 16];
@@ -28,7 +28,28 @@ impl<P: Fn(u64)> GarbageGenerator<P> {
         rng.fill_bytes(&mut iv);
         let cipher = ActiveCipher::new(&key.into(), &iv.into());
 
-        Self { buf, cipher, progress }
+        Self {
+            buf,
+            cipher,
+            progress,
+        }
+    }
+}
+
+impl<P: Fn(u64)> GarbageGenerator<P> {
+    /// Generates bytes from the cipher stream and writes them into the buffer to occupy the largest integer multiple of the generator's block size, in bytes.
+    pub fn fill_buffer(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let mut done = 0;
+        for chunk in buf.chunks_exact_mut(self.buf.len()) {
+            self.cipher
+                .apply_keystream_b2b(&self.buf, chunk)
+                .map_err(|e| {
+                    std::io::Error::new(std::io::ErrorKind::Other, format!("crypto error {:?}", e))
+                })?;
+            done += chunk.len();
+        }
+        (self.progress)(done.try_into().unwrap());
+        Ok(done)
     }
 }
 
@@ -40,8 +61,10 @@ impl<P: Fn(u64)> io::Read for GarbageGenerator<P> {
         for chunk in buf.chunks_exact_mut(self.buf.len()) {
             self.cipher
                 .apply_keystream_b2b(&self.buf, chunk)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("crypto error {:?}", e)))?;
-            done+=chunk.len();
+                .map_err(|e| {
+                    io::Error::new(io::ErrorKind::Other, format!("crypto error {:?}", e))
+                })?;
+            done += chunk.len();
         }
         (self.progress)(done.try_into().unwrap());
         Ok(done)
